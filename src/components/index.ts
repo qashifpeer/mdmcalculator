@@ -3,6 +3,7 @@ import MealsInput from "./mealsInput/MealsInput";
 import HeaderInput from "./headerInput/HeaderInput";
 import DisplayHeader from "./displayHeader/DisplayHeader";
 import DisplayMeals from "./displayMeals/DisplayMeals";
+import DisplayBalances from "./displayBalances/DisplayBalances";
 
 
 export {
@@ -11,6 +12,7 @@ export {
     HeaderInput,
     DisplayHeader,
     DisplayMeals,
+    DisplayBalances,
     // Add other components here as needed
  
 }

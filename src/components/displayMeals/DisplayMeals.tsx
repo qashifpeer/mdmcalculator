@@ -1,17 +1,17 @@
-'use client'
+"use client";
 
-import { useMeals } from '@/contexts/MealsContext'
+import { useMeals } from "@/contexts/MealsContext";
 
 const formatDate = (isoDate: string) => {
-  const date = new Date(isoDate)
-  const dd = String(date.getDate()).padStart(2, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const yyyy = date.getFullYear()
-  return `${dd}-${mm}-${yyyy}`
-}
+  const date = new Date(isoDate);
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
 
 export default function DisplayMeals() {
-  const { meals, deleteMeal } = useMeals()
+  const { meals, deleteMeal, totals } = useMeals();
 
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4">
@@ -35,22 +35,46 @@ export default function DisplayMeals() {
                   onDoubleClick={() => {
                     if (
                       confirm(
-                        `Are you sure you want to delete entry for ${formatDate(entry.date)}?`
+                        `Are you sure you want to delete entry for ${formatDate(
+                          entry.date
+                        )}?`
                       )
                     ) {
-                      deleteMeal(entry)
+                      deleteMeal(entry);
                     }
                   }}
                   className="hover:bg-red-50 cursor-pointer transition-colors duration-200"
                   title="Double-click to delete"
                 >
                   <td className="border px-4 py-2 text-center">{index + 1}</td>
-                  <td className="border px-4 py-2 text-center">{formatDate(entry.date)}</td>
-                  <td className="border px-4 py-2 text-center">{entry.prePrimary}</td>
-                  <td className="border px-4 py-2 text-center">{entry.primary}</td>
-                  <td className="border px-4 py-2 text-center">{entry.middle}</td>
+                  <td className="border px-4 py-2 text-center">
+                    {formatDate(entry.date)}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {entry.prePrimary}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {entry.primary}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {entry.middle}
+                  </td>
                 </tr>
               ))}
+              <tr className="font-semibold bg-gray-100">
+                <td className="border px-4 py-2 text-center" colSpan={2}>
+                  Total
+                </td>
+                <td className="border px-4 py-2 text-center">
+                  {totals.prePrimary}
+                </td>
+                <td className="border px-4 py-2 text-center">
+                  {totals.primary}
+                </td>
+                <td className="border px-4 py-2 text-center">
+                  {totals.middle}
+                </td>
+              </tr>
             </tbody>
           </table>
           <p className="text-xs text-gray-500 mt-2">
@@ -61,5 +85,5 @@ export default function DisplayMeals() {
         <p className="text-gray-600">No MEALS data found.</p>
       )}
     </div>
-  )
+  );
 }

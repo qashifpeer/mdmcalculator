@@ -1,20 +1,25 @@
-'use client'
+"use client";
 
-import React, { useState } from 'react'
-import { useMeals } from '@/contexts/MealsContext'
+import React, { useState } from "react";
+import { useMeals } from "@/contexts/MealsContext";
+import PreviousInputs from "../previousInputs/PreviousInputs";
 
 const MealsInput: React.FC = () => {
-  const [date, setDate] = useState('')
-  const [prePrimary, setPrePrimary] = useState('')
-  const [primary, setPrimary] = useState('')
-  const [middle, setMiddle] = useState('')
+  const [date, setDate] = useState("");
+  const [prePrimary, setPrePrimary] = useState("");
+  const [primary, setPrimary] = useState("");
+  const [middle, setMiddle] = useState("");
 
-  const { addMeal } = useMeals()
+  const { addMeal } = useMeals();
 
+ 
+
+  
+  
   const handleSubmit = () => {
     if (!date || !prePrimary || !primary || !middle) {
-      alert('Please fill in all fields.')
-      return
+      alert("Please fill in all fields.");
+      return;
     }
 
     const newEntry = {
@@ -22,24 +27,30 @@ const MealsInput: React.FC = () => {
       prePrimary: Number(prePrimary),
       primary: Number(primary),
       middle: Number(middle),
-    }
+    };
 
-    addMeal(newEntry)
+    addMeal(newEntry);
     // alert('Meal data saved!')
 
-    setDate('')
-    setPrePrimary('')
-    setPrimary('')
-    setMiddle('')
-  }
+  
+
+    setDate("");
+    setPrePrimary("");
+    setPrimary("");
+    setMiddle("");
+  };
 
   return (
     <div className="overflow-x-auto p-4">
+      
       {/* ... same table inputs as before ... */}
       <table className="min-w-full border-collapse border border-gray-300">
         <thead>
           <tr className="bg-gray-700">
-            <th className="border border-gray-300 px-4 py-2 text-center" colSpan={2}>
+            <th
+              className="border border-gray-300 px-4 py-2 text-center"
+              colSpan={2}
+            >
               Enter Roll (Day-Wise)
             </th>
           </tr>
@@ -100,7 +111,7 @@ const MealsInput: React.FC = () => {
         </button>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default MealsInput
+export default MealsInput;

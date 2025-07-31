@@ -1,13 +1,14 @@
-import { DisplayHeader, DisplayMeals, HeaderInput, MealsInput, PreviousInputs } from "@/components";
+import { DisplayBalances, DisplayHeader, DisplayMeals, HeaderInput, MealsInput, PreviousInputs } from "@/components";
 
 export default function Home() {
   return (
     <div className="flex flex-col justify-center items-center">
       {/* <HeaderInput /> */}
-      {/* <PreviousInputs /> */}
+      <PreviousInputs />
       <MealsInput />
       <DisplayHeader />
-      <DisplayMeals />
+      {/* <DisplayMeals /> */}
+      <DisplayBalances />
     </div>
   );
 }
