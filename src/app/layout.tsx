@@ -1,16 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { HeaderProvider } from "@/contexts/HeaderContext";
+import { MealsProvider } from "@/contexts/MealsContext";
+import { InputBalancesProvider } from "@/contexts/InputBalancesContext";
+import { CalculateProvider } from "@/contexts/CalculateContext";
+import { RiceProvider } from "@/contexts/RiceContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+<meta
+  name="format-detection"
+  content="telephone=no, date=no, email=no, address=no"
+/>;
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -23,11 +22,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <HeaderProvider>
+          <MealsProvider>
+            <InputBalancesProvider>
+              <CalculateProvider>
+                <RiceProvider>{children}</RiceProvider>
+              </CalculateProvider>
+            </InputBalancesProvider>
+          </MealsProvider>
+        </HeaderProvider>
       </body>
     </html>
   );
