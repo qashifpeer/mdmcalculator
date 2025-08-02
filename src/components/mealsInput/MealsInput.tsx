@@ -2,8 +2,6 @@
 
 import React, { useState } from "react";
 import { useMeals } from "@/contexts/MealsContext";
-import PreviousInputs from "../previousInputs/PreviousInputs";
-
 const MealsInput: React.FC = () => {
   const [date, setDate] = useState("");
   const [prePrimary, setPrePrimary] = useState("");
@@ -41,14 +39,13 @@ const MealsInput: React.FC = () => {
   };
 
   return (
-    <div className="overflow-x-auto p-4">
+    <section className="overflow-x-auto p-4">
       
-      {/* ... same table inputs as before ... */}
       <table className="min-w-full border-collapse border border-gray-300">
         <thead>
-          <tr className="bg-gray-700">
+          <tr className="">
             <th
-              className="border border-gray-300 px-4 py-2 text-center"
+              className="border border-gray-300 px-4 py-1 text-center bg-gray-600 text-orange-500"
               colSpan={2}
             >
               Enter Roll (Day-Wise)
@@ -57,8 +54,8 @@ const MealsInput: React.FC = () => {
         </thead>
         <tbody>
           <tr>
-            <td className="border border-gray-300 px-4 py-2">Date</td>
-            <td className="border border-gray-300 px-4 py-2">
+            <td className="border border-gray-300 px-4 py-0.5">Date</td>
+            <td className="border border-gray-300 px-4 py-0.5">
               <input
                 type="date"
                 value={date}
@@ -105,12 +102,12 @@ const MealsInput: React.FC = () => {
       <div className="mt-4 text-center">
         <button
           onClick={handleSubmit}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
           Submit
         </button>
       </div>
-    </div>
+    </section>
   );
 };
 

@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { HeaderProvider } from "@/contexts/HeaderContext";
 import { MealsProvider } from "@/contexts/MealsContext";
+import { InputBalancesProvider } from "@/contexts/InputBalancesContext";
+import { CalculateProvider } from "@/contexts/CalculateContext";
+import { RiceProvider } from "@/contexts/RiceContext";
 
 <meta
   name="format-detection"
   content="telephone=no, date=no, email=no, address=no"
-/>
-
+/>;
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -24,8 +26,12 @@ export default function RootLayout({
       <body>
         <HeaderProvider>
           <MealsProvider>
-        {children}
-        </MealsProvider>
+            <InputBalancesProvider>
+              <CalculateProvider>
+                <RiceProvider>{children}</RiceProvider>
+              </CalculateProvider>
+            </InputBalancesProvider>
+          </MealsProvider>
         </HeaderProvider>
       </body>
     </html>

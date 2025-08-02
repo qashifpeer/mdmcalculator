@@ -4,6 +4,8 @@ import HeaderInput from "./headerInput/HeaderInput";
 import DisplayHeader from "./displayHeader/DisplayHeader";
 import DisplayMeals from "./displayMeals/DisplayMeals";
 import DisplayBalances from "./displayBalances/DisplayBalances";
+import DisplayData from "./DisplayData/DisplayData";
+import FinalCalculations from "./finalCalculations/FinalCalculations";
 
 
 export {
@@ -13,6 +15,9 @@ export {
     DisplayHeader,
     DisplayMeals,
     DisplayBalances,
+    DisplayData,
+    FinalCalculations,
+    
     // Add other components here as needed
  
 }

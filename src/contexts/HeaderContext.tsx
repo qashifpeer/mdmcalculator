@@ -1,4 +1,5 @@
 "use client";
+import {useEffect} from 'react';
 
 import { createContext, useContext, useState, ReactNode } from "react";
 
@@ -20,6 +21,17 @@ export const HeaderProvider = ({ children }: { children: ReactNode }) => {
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [schoolName, setSchoolName] = useState<string>("");
   const [year, setYear] = useState<string>("");
+
+   // 🔄 Load from localStorage on first mount
+  useEffect(() => {
+    const monthFromStorage = localStorage.getItem("selectedMonth");
+    const yearFromStorage = localStorage.getItem("year");
+    const schoolNameFromStorage = localStorage.getItem("schoolName");
+
+    if (monthFromStorage) setSelectedMonth(monthFromStorage);
+    if (yearFromStorage) setYear(yearFromStorage);
+    if (schoolNameFromStorage) setSchoolName(schoolNameFromStorage);
+  }, []);
 
   return (
     <HeaderContext.Provider

@@ -63,7 +63,7 @@ export const MealsProvider = ({ children }: { children: React.ReactNode }) => {
           setMeals(sorted)
         }
       } catch (e) {
-        console.error('Failed to parse mealsData from localStorage')
+        console.error('Failed to parse mealsData from localStorage',e)
       }
     }
      if (storedTotals) {
@@ -71,7 +71,7 @@ export const MealsProvider = ({ children }: { children: React.ReactNode }) => {
       const parsedTotals = JSON.parse(storedTotals)
       setTotals(parsedTotals)
     } catch (e) {
-      console.error('Failed to parse mealsTotals')
+      console.error('Failed to parse mealsTotals',e)
     }
   }
   }, [])
