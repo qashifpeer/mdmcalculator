@@ -63,11 +63,11 @@ export default function MealsReportPage() {
 
       setMessage('Mid day meal data saved for today.');
       setForm({ prePrimary: '', primary: '', middle: '' });
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Failed to save data. Please try again.';
+    } catch (err:unknown) {
+      const msg = 
+      err instanceof Error 
+      ? err.message 
+      : 'Failed to save data. Please try again.'
       setMessage(msg);
     } finally {
       setLoading(false);
@@ -177,11 +177,11 @@ export default function MealsReportPage() {
           }
           setMessage('Today\'s entry updated successfully.');
           setExistingId(null);
-        } catch (err:unknown) {
+        } catch (err: unknown) {
           const msg =
-        err instanceof Error
-          ? err.message
-          : 'Failed to update today\'s entry.';
+          err instanceof Error
+          ? err.message 
+          : 'Failed to update today\'s entry.'
           setMessage(msg);
         } finally {
           setLoading(false);
