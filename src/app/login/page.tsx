@@ -1,34 +1,56 @@
-import { headers } from "next/headers";
+"use client";
 
-async function getCsrfToken(): Promise<string> {
-  const headersList = await headers(); // ❗ no need to await
-  const host = headersList.get("host") ?? "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+import { FormEvent, useState } from "react";
+import { signIn } from "next-auth/react";
 
-  const res = await fetch(`${protocol}://${host}/api/auth/csrf`, {
-    cache: "no-store",
-  });
+export default function LoginPage() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const data = (await res.json()) as { csrfToken: string };
-  return data.csrfToken;
-}
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-export default async function LoginPage() {
-  const csrfToken = await getCsrfToken();
+    const form = e.currentTarget;
+    const username = (form.elements.namedItem("username") as HTMLInputElement).value;
+    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+    try {
+      const res = await signIn("credentials", {
+        username,
+        password,
+        callbackUrl: "https://mdmcal.vercel.app/",
+        redirect: false, // ✅ better control
+      });
+
+      if (res?.error) {
+        setError("Invalid username or password");
+        setLoading(false);
+      } else {
+        // ✅ manual redirect (more reliable)
+        window.location.href = res?.url || "/";
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Something went wrong");
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
       <form
-        method="POST"
-        action="/api/auth/callback/credentials"
+        onSubmit={handleSubmit}
         className="bg-white shadow p-6 rounded w-full max-w-sm space-y-4"
       >
         <h1 className="text-xl font-semibold text-center">
           Mid-Day Meals Login
         </h1>
 
-        <input type="hidden" name="csrfToken" value={csrfToken} />
-        <input type="hidden" name="callbackUrl" value="/" />
+        {error && (
+          <p className="text-sm text-red-600 text-center">{error}</p>
+        )}
 
         <div>
           <label className="block text-sm mb-1">Username</label>
@@ -52,9 +74,10 @@ export default async function LoginPage() {
 
         <button
           type="submit"
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+          disabled={loading}
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-60"
         >
-          Login
+          {loading ? "Logging in..." : "Login"}
         </button>
       </form>
     </div>
