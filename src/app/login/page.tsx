@@ -25,7 +25,7 @@ export default function LoginPage() {
         username,
         password,
         callbackUrl: "/",
-        redirect: false, // ✅ better control
+        redirect: true, // ✅ better control
       });
 
       if (res?.error) {
