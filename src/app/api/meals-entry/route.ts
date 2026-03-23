@@ -1,6 +1,7 @@
-// src/app/api/mid-day-meal/route.ts
 import { NextResponse } from 'next/server';
 import { sanityClient } from '@/sanity/client';
+import { getServerSession } from "next-auth";  // ✅ Fixed import
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";  // ✅ Relative path (adjust if needed)
 
 type MealPayload = {
   prePrimary: number;
@@ -10,6 +11,11 @@ type MealPayload = {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);  // ✅ No req/res args
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const body = (await request.json()) as MealPayload;
 
     // Basic validation
@@ -36,7 +42,6 @@ export async function POST(request: Request) {
       });
     }
 
-
     const doc = {
       _type: 'mealsEntry',
       date: isoDate,
@@ -57,9 +62,13 @@ export async function POST(request: Request) {
   }
 }
 
-
 export async function PUT(request: Request) {
   try {
+    const session = await getServerSession(authOptions);  // ✅ Add this
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const body = (await request.json()) as MealPayload;
 
     const prePrimary = Number(body.prePrimary) || 0;
@@ -86,7 +95,7 @@ export async function PUT(request: Request) {
 
     const updated = await sanityClient
       .patch(existing._id)
-      .set({ prePrimary, primary, middle })
+      .set({ prePrimary, primary, middle })  // ✅ Good Sanity pattern
       .commit();
 
     return NextResponse.json({ success: true, id: updated._id });
@@ -98,4 +107,3 @@ export async function PUT(request: Request) {
     );
   }
 }
-

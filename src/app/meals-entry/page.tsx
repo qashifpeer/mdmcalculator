@@ -1,7 +1,8 @@
 // src/app/page.tsx
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { useSession } from "next-auth/react";
 
 type MealsFormState = {
   prePrimary: string;
@@ -11,35 +12,34 @@ type MealsFormState = {
 
 export default function MealsReportPage() {
   const [form, setForm] = useState<MealsFormState>({
-    prePrimary: '',
-    primary: '',
-    middle: '',
+    prePrimary: "",
+    primary: "",
+    middle: "",
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [existingId, setExistingId] = useState<string | null>(null);
 
+  const { data: session, status } = useSession();
+  if (status === "loading") return <div>Loading session...</div>;
+  if (!session) return <div>Please log in to add entries</div>; // extra safety
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
     setExistingId(null); // new state
 
     try {
-      const res = await fetch('/api/meals-entry', {
-        method: 'POST',
+      const res = await fetch("/api/meals-entry", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           prePrimary: Number(form.prePrimary),
@@ -50,24 +50,24 @@ export default function MealsReportPage() {
 
       const data = await res.json();
 
-      if (data.reason === 'already_exists') {
-      // show message and store that we can update
-      setMessage('Entry for today already exists. You can update it.');
-      setExistingId(data.id);
-      return;
-    }
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Request failed');
+      if (data.reason === "already_exists") {
+        // show message and store that we can update
+        setMessage("Entry for today already exists. You can update it.");
+        setExistingId(data.id);
+        return;
       }
 
-      setMessage('Mid day meal data saved for today.');
-      setForm({ prePrimary: '', primary: '', middle: '' });
-    } catch (err:unknown) {
-      const msg = 
-      err instanceof Error 
-      ? err.message 
-      : 'Failed to save data. Please try again.'
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Request failed");
+      }
+
+      setMessage("Mid day meal data saved for today.");
+      setForm({ prePrimary: "", primary: "", middle: "" });
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to save data. Please try again.";
       setMessage(msg);
     } finally {
       setLoading(false);
@@ -143,60 +143,53 @@ export default function MealsReportPage() {
             disabled={loading}
             className="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {loading ? 'Saving...' : 'Save for today'}
+            {loading ? "Saving..." : "Save for today"}
           </button>
         </form>
 
-        
+        {message && (
+          <p className="mt-4 text-center text-sm text-gray-700">{message}</p>
+        )}
 
-          {message && (
-  <p className="mt-4 text-center text-sm text-gray-700">
-    {message}
-  </p>
-)}
-
-{existingId && (
-  <div className="mt-2 text-center">
-    <button
-      type="button"
-      onClick={async () => {
-        setLoading(true);
-        try {
-          const res = await fetch('/api/meals-entry', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prePrimary: Number(form.prePrimary),
-              primary: Number(form.primary),
-              middle: Number(form.middle),
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.success) {
-            throw new Error(data.error || 'Update failed');
-          }
-          setMessage('Today\'s entry updated successfully.');
-          setExistingId(null);
-        } catch (err: unknown) {
-          const msg =
-          err instanceof Error
-          ? err.message 
-          : 'Failed to update today\'s entry.'
-          setMessage(msg);
-        } finally {
-          setLoading(false);
-        }
-      }}
-      className="inline-flex items-center justify-center rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60"
-      disabled={loading}
-    >
-      Update today&apos;s entry
-    </button>
-  </div>
-)}
-
-
-
+        {existingId && (
+          <div className="mt-2 text-center">
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const res = await fetch("/api/meals-entry", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      prePrimary: Number(form.prePrimary),
+                      primary: Number(form.primary),
+                      middle: Number(form.middle),
+                    }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok || !data.success) {
+                    throw new Error(data.error || "Update failed");
+                  }
+                  setMessage("Today's entry updated successfully.");
+                  setExistingId(null);
+                } catch (err: unknown) {
+                  const msg =
+                    err instanceof Error
+                      ? err.message
+                      : "Failed to update today's entry.";
+                  setMessage(msg);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="inline-flex items-center justify-center rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60"
+              disabled={loading}
+            >
+              Update today&apos;s entry
+            </button>
+          </div>
+        )}
       </div>
     </main>
   );

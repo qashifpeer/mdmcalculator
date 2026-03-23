@@ -9,7 +9,8 @@ const navItems = [
   { href: '/monthly-report', label: 'Monthly Report' },
   { href: '/consolidated-report', label: 'Consolidated Report' },
   { href: '/income-report', label: 'Income & Rice Report' },
-  { href: '/meals-import', label: 'Meals Import' }, // if you use this
+  { href: '/income-received', label: 'Income Entry' }, 
+  { href: '/rice-received', label: 'Rice Entry' }, 
 ];
 
 export default function Navbar() {

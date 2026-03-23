@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import Navbar from "@/components/Navbar";
+import Providers from "@/components/providers";
 
 export const metadata: Metadata = {
   title: "Mid Day Meals",
@@ -17,7 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="">
          <Navbar />
-        {children}
+         <Providers>{children}</Providers>
         </body>
     </html>
   );
