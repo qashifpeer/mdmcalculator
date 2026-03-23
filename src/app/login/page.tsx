@@ -1,58 +1,41 @@
-"use client";
+import { headers } from "next/headers";
 
-import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+async function getCsrfToken(): Promise<string> {
+  const headersList = await headers(); // ❗ no need to await
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
 
-export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const router = useRouter();
+  const res = await fetch(`${protocol}://${host}/api/auth/csrf`, {
+    cache: "no-store",
+  });
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  const data = (await res.json()) as { csrfToken: string };
+  return data.csrfToken;
+}
 
-    const form = e.currentTarget;
-    const username = (form.elements.namedItem("username") as HTMLInputElement).value;
-    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
-
-    const res = await signIn("credentials", {
-      username,
-      password,
-      // redirect: false,
-    });
-
-    setLoading(false);
-
-    if (res?.error) {
-      setError("Invalid username or password");
-      return;
-    }
-
-    // Always send to home (or /meals-entry)
-    router.push("/");
-  }
+export default async function LoginPage() {
+  const csrfToken = await getCsrfToken();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
       <form
-        onSubmit={handleSubmit}
+        method="POST"
+        action="/api/auth/callback/credentials"
         className="bg-white shadow p-6 rounded w-full max-w-sm space-y-4"
       >
-        <h1 className="text-xl font-semibold text-center">Mid-Day Meals Login</h1>
+        <h1 className="text-xl font-semibold text-center">
+          Mid-Day Meals Login
+        </h1>
 
-        {error && (
-          <p className="text-sm text-red-600 text-center">{error}</p>
-        )}
+        <input type="hidden" name="csrfToken" value={csrfToken} />
+        <input type="hidden" name="callbackUrl" value="/" />
 
         <div>
           <label className="block text-sm mb-1">Username</label>
           <input
             name="username"
+            type="text"
             className="w-full border rounded px-3 py-2"
-            autoComplete="username"
             required
           />
         </div>
@@ -63,16 +46,15 @@ export default function LoginPage() {
             name="password"
             type="password"
             className="w-full border rounded px-3 py-2"
-            autoComplete="current-password"
             required
           />
         </div>
 
         <button
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+          type="submit"
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
         >
-          {loading ? "Logging in..." : "Login"}
+          Login
         </button>
       </form>
     </div>
