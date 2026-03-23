@@ -2,15 +2,19 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
+  
 
     const form = e.currentTarget;
     const username = (form.elements.namedItem("username") as HTMLInputElement).value;
@@ -20,7 +24,7 @@ export default function LoginPage() {
       const res = await signIn("credentials", {
         username,
         password,
-        callbackUrl: "https://mdmcal.vercel.app/",
+        callbackUrl: "/",
         redirect: false, // ✅ better control
       });
 
@@ -29,7 +33,8 @@ export default function LoginPage() {
         setLoading(false);
       } else {
         // ✅ manual redirect (more reliable)
-        window.location.href = res?.url || "/";
+        router.push(res?.url || "/");
+        router.refresh();
       }
     } catch (err) {
       console.error(err);
