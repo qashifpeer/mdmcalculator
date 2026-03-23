@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useSession } from "next-auth/react";
 
 type RiceFormState = {
   date: string;
@@ -19,6 +20,10 @@ export default function RiceReceivedPage() {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+   const { data: session, status } = useSession();
+      if (status === "loading") return <div>Loading session...</div>;
+      if (!session) return <div>Please log in to proceed further</div>; // extra safety
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
