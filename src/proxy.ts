@@ -3,11 +3,14 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function proxy(request: NextRequest) {
-  const token = await getToken({ req: request });
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,  // ✅ important for Vercel
+  });
+
   const isLoggedIn = !!token;
   const { pathname } = request.nextUrl;
 
-  // Public paths (login, static, api auth)
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
@@ -32,7 +35,6 @@ export async function proxy(request: NextRequest) {
   );
 
   if (isProtected && !isLoggedIn) {
-    // Just send to /login, no callbackUrl
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
