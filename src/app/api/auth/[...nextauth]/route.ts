@@ -20,11 +20,11 @@ export const authOptions = {
         ) {
           return {
             id: "mdm-admin-1",
-            name: "MDM Admin",
+            name: "Mohd Muzaffar",
             email: "admin@example.com",
           };
         }
-
+        console.log("Invalid credentials", username);
         return null;
       },
     }),
