@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 import { sanityClient } from '@/sanity/client';
 
 type MonthlyReportReq = {
-  year: number;   // e.g. 2025
-  month: number;  // 1-12
+  year: number;
+  month: number; // 1-12
 };
 
 type MealsEntry = {
@@ -15,290 +15,305 @@ type MealsEntry = {
 };
 
 type IncomeRow = {
-  date: string;
+  date?: string;
   prePrimaryAmount?: number;
   primaryAmount?: number;
   middleAmount?: number;
 };
 
 type RiceRow = {
-  date: string;
+  date?: string;
   prePrimaryQty?: number;
   primaryQty?: number;
   middleQty?: number;
 };
 
+type SectionTriplet = {
+  prePrimary: number;
+  primary: number;
+  middle: number;
+};
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getMonthRange(year: number, month: number) {
+  const fromDate = new Date(year, month - 1, 1);
+  const toDate = new Date(year, month, 0);
+
+  return {
+    from: formatLocalDate(fromDate),
+    to: formatLocalDate(toDate),
+  };
+}
+
+function getPreviousMonthEnd(year: number, month: number) {
+  return formatLocalDate(new Date(year, month - 1, 0));
+}
+
+function getFinancialYearStart(year: number, month: number) {
+  const fyStartYear = month >= 4 ? year : year - 1;
+  return formatLocalDate(new Date(fyStartYear, 3, 1));
+}
+
+function sumMeals(rows: MealsEntry[]): SectionTriplet {
+  return rows.reduce(
+    (acc, row) => {
+      acc.prePrimary += row.prePrimary || 0;
+      acc.primary += row.primary || 0;
+      acc.middle += row.middle || 0;
+      return acc;
+    },
+    { prePrimary: 0, primary: 0, middle: 0 }
+  );
+}
+
+function sumIncome(rows: IncomeRow[]): SectionTriplet {
+  return rows.reduce(
+    (acc, row) => {
+      acc.prePrimary += row.prePrimaryAmount || 0;
+      acc.primary += row.primaryAmount || 0;
+      acc.middle += row.middleAmount || 0;
+      return acc;
+    },
+    { prePrimary: 0, primary: 0, middle: 0 }
+  );
+}
+
+function sumRice(rows: RiceRow[]): SectionTriplet {
+  return rows.reduce(
+    (acc, row) => {
+      acc.prePrimary += row.prePrimaryQty || 0;
+      acc.primary += row.primaryQty || 0;
+      acc.middle += row.middleQty || 0;
+      return acc;
+    },
+    { prePrimary: 0, primary: 0, middle: 0 }
+  );
+}
+
+function getRiceConsumedFromMeals(meals: SectionTriplet) {
+  return {
+    prePrimary: meals.prePrimary * 0.1,
+    primary: meals.primary * 0.1,
+    middle: meals.middle * 0.15,
+  };
+}
+
+function getExpenditureFromMeals(
+  meals: SectionTriplet,
+  rates: SectionTriplet
+) {
+  return {
+    prePrimary: meals.prePrimary * rates.prePrimary,
+    primary: meals.primary * rates.primary,
+    middle: meals.middle * rates.middle,
+  };
+}
+
+function getSectionTotal(values: SectionTriplet) {
+  return values.prePrimary + values.primary + values.middle;
+}
+
+async function fetchRates() {
+  const rates = await sanityClient.fetch(
+    `*[_type == "inputRates"] | order(_createdAt desc)[0]{
+      prePrimaryRate,
+      primaryRate,
+      middleRate
+    }`
+  );
+
+  return {
+    prePrimary: rates?.prePrimaryRate ?? 0,
+    primary: rates?.primaryRate ?? 0,
+    middle: rates?.middleRate ?? 0,
+  };
+}
+
+async function fetchMeals(from: string, to: string): Promise<MealsEntry[]> {
+  return sanityClient.fetch(
+    `*[
+      _type == "mealsEntry" &&
+      date >= $from &&
+      date <= $to
+    ] | order(date asc){
+      date,
+      prePrimary,
+      primary,
+      middle
+    }`,
+    { from, to }
+  );
+}
+
+async function fetchIncome(from: string, to: string): Promise<IncomeRow[]> {
+  return sanityClient.fetch(
+    `*[
+      _type == "incomeReceived" &&
+      date >= $from &&
+      date <= $to
+    ] | order(date asc){
+      date,
+      prePrimaryAmount,
+      primaryAmount,
+      middleAmount
+    }`,
+    { from, to }
+  );
+}
+
+async function fetchRice(from: string, to: string): Promise<RiceRow[]> {
+  return sanityClient.fetch(
+    `*[
+      _type == "riceReceived" &&
+      date >= $from &&
+      date <= $to
+    ] | order(date asc){
+      date,
+      prePrimaryQty,
+      primaryQty,
+      middleQty
+    }`,
+    { from, to }
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as MonthlyReportReq;
-    const { year, month } = body;
+    const year = Number(body.year);
+    const month = Number(body.month);
 
-    if (!year || !month) {
+    if (!year || !month || month < 1 || month > 12) {
       return NextResponse.json(
-        { success: false, error: 'year and month are required' },
+        { success: false, error: 'Valid year and month (1-12) are required' },
         { status: 400 }
       );
     }
 
-    // Current month range
-    const fromDate = new Date(year, month - 1, 1);
-    const toDate = new Date(year, month, 0);
-    const from = fromDate.toISOString().slice(0, 10);
-    const to = toDate.toISOString().slice(0, 10);
+    const { from, to } = getMonthRange(year, month);
+    const prevTo = getPreviousMonthEnd(year, month);
+    const fyStart = getFinancialYearStart(year, month);
+    const isApril = month === 4;
 
-    // Previous month end
-    const prevMonthEnd = new Date(year, month - 1, 0);
-    const prevTo = prevMonthEnd.toISOString().slice(0, 10);
+    const rates = await fetchRates();
 
-    // ---------- Rates (latest) ----------
-    const rates = await sanityClient.fetch(
-      `*[_type == "inputRates"] | order(_createdAt desc)[0]{
-        prePrimaryRate,
-        primaryRate,
-        middleRate
-      }`
-    );
+    // Current month data
+    const [meals, incomesCurrentRows, riceCurrentRows] = await Promise.all([
+      fetchMeals(from, to),
+      fetchIncome(from, to),
+      fetchRice(from, to),
+    ]);
 
-    const preRate = rates?.prePrimaryRate ?? 0;
-    const priRate = rates?.primaryRate ?? 0;
-    const midRate = rates?.middleRate ?? 0;
+    const currentMeals = sumMeals(meals);
+    const currentIncome = sumIncome(incomesCurrentRows);
+    const currentRiceLifted = sumRice(riceCurrentRows);
 
-    // ---------- Meals current month ----------
-    const meals: MealsEntry[] = await sanityClient.fetch(
-      `*[
-        _type == "mealsEntry" &&
-        date >= $from &&
-        date <= $to
-      ] | order(date asc){
-        date,
-        prePrimary,
-        primary,
-        middle
-      }`,
-      { from, to }
-    );
+    const currentRiceConsumed = getRiceConsumedFromMeals(currentMeals);
+    const currentExpenditure = getExpenditureFromMeals(currentMeals, rates);
 
-    let totPreMeals = 0;
-    let totPriMeals = 0;
-    let totMidMeals = 0;
+    const totalMealsAll = getSectionTotal(currentMeals);
+    const totalIncomeCurrent = getSectionTotal(currentIncome);
+    const totalRiceLiftedCurrent = getSectionTotal(currentRiceLifted);
+    const totalRiceConsumedCurrent = getSectionTotal(currentRiceConsumed);
+    const totalExpenditureCurrent = getSectionTotal(currentExpenditure);
 
-    for (const m of meals) {
-      totPreMeals += m.prePrimary || 0;
-      totPriMeals += m.primary || 0;
-      totMidMeals += m.middle || 0;
+    // Previous period within same FY only
+    let previousIncome: SectionTriplet = {
+      prePrimary: 0,
+      primary: 0,
+      middle: 0,
+    };
+
+    let previousMeals: SectionTriplet = {
+      prePrimary: 0,
+      primary: 0,
+      middle: 0,
+    };
+
+    let previousRiceReceived: SectionTriplet = {
+      prePrimary: 0,
+      primary: 0,
+      middle: 0,
+    };
+
+    if (!isApril) {
+      const [incomesPrevRows, mealsPrevRows, ricePrevRows] = await Promise.all([
+        fetchIncome(fyStart, prevTo),
+        fetchMeals(fyStart, prevTo),
+        fetchRice(fyStart, prevTo),
+      ]);
+
+      previousIncome = sumIncome(incomesPrevRows);
+      previousMeals = sumMeals(mealsPrevRows);
+      previousRiceReceived = sumRice(ricePrevRows);
     }
 
-    const totalMealsAll = totPreMeals + totPriMeals + totMidMeals;
+    const previousRiceConsumed = getRiceConsumedFromMeals(previousMeals);
+    const previousExpenditure = getExpenditureFromMeals(previousMeals, rates);
 
-    // Rice consumed from meals (current month) – kg
-    const riceConsumedPre = totPreMeals * 0.1;   // 100g
-    const riceConsumedPri = totPriMeals * 0.1;
-    const riceConsumedMid = totMidMeals * 0.15;  // 150g
-    const totalRiceConsumedCurrent =
-      riceConsumedPre + riceConsumedPri + riceConsumedMid;
+    const totalIncomePrev = getSectionTotal(previousIncome);
+    const totalRiceReceivedPrev = getSectionTotal(previousRiceReceived);
+    const totalRiceConsumedPrev = getSectionTotal(previousRiceConsumed);
+    const totalExpenditurePrev = getSectionTotal(previousExpenditure);
 
-    // Expenditure from meals & rates (current month)
-    const expPre = totPreMeals * preRate;
-    const expPri = totPriMeals * priRate;
-    const expMid = totMidMeals * midRate;
-    const totalExpenditureCurrent = expPre + expPri + expMid;
-
-    // ---------- Income current month (per section) ----------
-    const incomesCurrent: IncomeRow[] = await sanityClient.fetch(
-      `*[
-        _type == "incomeReceived" &&
-        date >= $from &&
-        date <= $to
-      ]{
-        date,
-        prePrimaryAmount,
-        primaryAmount,
-        middleAmount
-      }`,
-      { from, to }
-    );
-
-    let incomePreCur = 0;
-    let incomePriCur = 0;
-    let incomeMidCur = 0;
-
-    for (const inc of incomesCurrent) {
-      incomePreCur += inc.prePrimaryAmount || 0;
-      incomePriCur += inc.primaryAmount || 0;
-      incomeMidCur += inc.middleAmount || 0;
-    }
-
-    const totalIncomeCurrent =
-      incomePreCur + incomePriCur + incomeMidCur;
-
-    // ---------- Rice received current month (per section) ----------
-    const riceCurrent: RiceRow[] = await sanityClient.fetch(
-      `*[
-        _type == "riceReceived" &&
-        date >= $from &&
-        date <= $to
-      ]{
-        date,
-        prePrimaryQty,
-        primaryQty,
-        middleQty
-      }`,
-      { from, to }
-    );
-
-    let ricePreCur = 0;
-    let ricePriCur = 0;
-    let riceMidCur = 0;
-
-    for (const r of riceCurrent) {
-      ricePreCur += r.prePrimaryQty || 0;
-      ricePriCur += r.primaryQty || 0;
-      riceMidCur += r.middleQty || 0;
-    }
-
-    const totalRiceLiftedCurrent = ricePreCur + ricePriCur + riceMidCur;
-
-    // ---------- Previous period (for opening balances) ----------
-
-    // Income up to previous month (per section)
-    const incomesPrev: IncomeRow[] = await sanityClient.fetch(
-      `*[
-        _type == "incomeReceived" &&
-        date <= $prevTo
-      ]{
-        prePrimaryAmount,
-        primaryAmount,
-        middleAmount
-      }`,
-      { prevTo }
-    );
-
-    let incomePrePrev = 0;
-    let incomePriPrev = 0;
-    let incomeMidPrev = 0;
-
-    for (const inc of incomesPrev) {
-      incomePrePrev += inc.prePrimaryAmount || 0;
-      incomePriPrev += inc.primaryAmount || 0;
-      incomeMidPrev += inc.middleAmount || 0;
-    }
-
-    const totalIncomePrev =
-      incomePrePrev + incomePriPrev + incomeMidPrev;
-
-    // Meals up to previous month
-    const mealsPrev: MealsEntry[] = await sanityClient.fetch(
-      `*[
-        _type == "mealsEntry" &&
-        date <= $prevTo
-      ]{
-        prePrimary,
-        primary,
-        middle
-      }`,
-      { prevTo }
-    );
-
-    let prevPreMeals = 0;
-    let prevPriMeals = 0;
-    let prevMidMeals = 0;
-
-    for (const m of mealsPrev) {
-      prevPreMeals += m.prePrimary || 0;
-      prevPriMeals += m.primary || 0;
-      prevMidMeals += m.middle || 0;
-    }
-
-    const prevRiceConsumedPre = prevPreMeals * 0.1;
-    const prevRiceConsumedPri = prevPriMeals * 0.1;
-    const prevRiceConsumedMid = prevMidMeals * 0.15;
-    const totalRiceConsumedPrev =
-      prevRiceConsumedPre + prevRiceConsumedPri + prevRiceConsumedMid;
-
-    const prevExpPre = prevPreMeals * preRate;
-    const prevExpPri = prevPriMeals * priRate;
-    const prevExpMid = prevMidMeals * midRate;
-    const totalExpenditurePrev = prevExpPre + prevExpPri + prevExpMid;
-
-    // Rice received up to previous month (per section)
-    const ricePrev: RiceRow[] = await sanityClient.fetch(
-      `*[
-        _type == "riceReceived" &&
-        date <= $prevTo
-      ]{
-        prePrimaryQty,
-        primaryQty,
-        middleQty
-      }`,
-      { prevTo }
-    );
-
-    let ricePrePrev = 0;
-    let ricePriPrev = 0;
-    let riceMidPrev = 0;
-
-    for (const r of ricePrev) {
-      ricePrePrev += r.prePrimaryQty || 0;
-      ricePriPrev += r.primaryQty || 0;
-      riceMidPrev += r.middleQty || 0;
-    }
-
-    const totalRiceReceivedPrev = ricePrePrev + ricePriPrev + riceMidPrev;
-
-    // ---------- Opening/closing balances (totals) ----------
-    const openingAmountBalance =
-      totalIncomePrev - totalExpenditurePrev;
+    // Total opening / closing
+    const openingAmountBalance = totalIncomePrev - totalExpenditurePrev;
     const closingAmountBalance =
-      openingAmountBalance +
-      totalIncomeCurrent -
-      totalExpenditureCurrent;
+      openingAmountBalance + totalIncomeCurrent - totalExpenditureCurrent;
 
-    const openingRiceBalance =
-      totalRiceReceivedPrev - totalRiceConsumedPrev;
-    const closingRiceBalance =
-      openingRiceBalance +
-      totalRiceLiftedCurrent -
-      totalRiceConsumedCurrent;
-
+    const openingRiceBalance = totalRiceReceivedPrev - totalRiceConsumedPrev;
     const totalRiceAvailableCurrent =
       openingRiceBalance + totalRiceLiftedCurrent;
+    const closingRiceBalance =
+      totalRiceAvailableCurrent - totalRiceConsumedCurrent;
 
-    // ---------- Per-section money balances ----------
-    const openAmtPre = incomePrePrev - prevExpPre;
-    const openAmtPri = incomePriPrev - prevExpPri;
-    const openAmtMid = incomeMidPrev - prevExpMid;
+    // Section-wise money
+    const openAmtPre =
+      previousIncome.prePrimary - previousExpenditure.prePrimary;
+    const openAmtPri = previousIncome.primary - previousExpenditure.primary;
+    const openAmtMid = previousIncome.middle - previousExpenditure.middle;
 
-    const availAmtPre = openAmtPre + incomePreCur;
-    const availAmtPri = openAmtPri + incomePriCur;
-    const availAmtMid = openAmtMid + incomeMidCur;
+    const availAmtPre = openAmtPre + currentIncome.prePrimary;
+    const availAmtPri = openAmtPri + currentIncome.primary;
+    const availAmtMid = openAmtMid + currentIncome.middle;
 
-    const closeAmtPre = availAmtPre - expPre;
-    const closeAmtPri = availAmtPri - expPri;
-    const closeAmtMid = availAmtMid - expMid;
+    const closeAmtPre = availAmtPre - currentExpenditure.prePrimary;
+    const closeAmtPri = availAmtPri - currentExpenditure.primary;
+    const closeAmtMid = availAmtMid - currentExpenditure.middle;
 
-    // ---------- Per-section rice balances ----------
-    const openRicePre = ricePrePrev - prevRiceConsumedPre;
-    const openRicePri = ricePriPrev - prevRiceConsumedPri;
-    const openRiceMid = riceMidPrev - prevRiceConsumedMid;
+    // Section-wise rice
+    const openRicePre =
+      previousRiceReceived.prePrimary - previousRiceConsumed.prePrimary;
+    const openRicePri =
+      previousRiceReceived.primary - previousRiceConsumed.primary;
+    const openRiceMid =
+      previousRiceReceived.middle - previousRiceConsumed.middle;
 
-    const availRicePre = openRicePre + ricePreCur;
-    const availRicePri = openRicePri + ricePriCur;
-    const availRiceMid = openRiceMid + riceMidCur;
+    const availRicePre = openRicePre + currentRiceLifted.prePrimary;
+    const availRicePri = openRicePri + currentRiceLifted.primary;
+    const availRiceMid = openRiceMid + currentRiceLifted.middle;
 
-    const closeRicePre = availRicePre - riceConsumedPre;
-    const closeRicePri = availRicePri - riceConsumedPri;
-    const closeRiceMid = availRiceMid - riceConsumedMid;
+    const closeRicePre = availRicePre - currentRiceConsumed.prePrimary;
+    const closeRicePri = availRicePri - currentRiceConsumed.primary;
+    const closeRiceMid = availRiceMid - currentRiceConsumed.middle;
 
     return NextResponse.json({
       success: true,
       month,
       year,
+      financialYearStart: fyStart,
       meals,
       totals: {
         meals: {
-          prePrimary: totPreMeals,
-          primary: totPriMeals,
-          middle: totMidMeals,
+          prePrimary: currentMeals.prePrimary,
+          primary: currentMeals.primary,
+          middle: currentMeals.middle,
           all: totalMealsAll,
         },
         income: {
@@ -307,9 +322,9 @@ export async function POST(request: Request) {
           closingAmountBalance,
         },
         expenditure: {
-          prePrimary: expPre,
-          primary: expPri,
-          middle: expMid,
+          prePrimary: currentExpenditure.prePrimary,
+          primary: currentExpenditure.primary,
+          middle: currentExpenditure.middle,
           totalExpenditureCurrent,
         },
         rice: {
@@ -318,65 +333,66 @@ export async function POST(request: Request) {
           openingRiceBalance,
           closingRiceBalance,
           totalRiceAvailableCurrent,
-          riceConsumedPre,
-          riceConsumedPri,
-          riceConsumedMid,
+          riceConsumedPre: currentRiceConsumed.prePrimary,
+          riceConsumedPri: currentRiceConsumed.primary,
+          riceConsumedMid: currentRiceConsumed.middle,
         },
         sectionMoney: {
           prePrimary: {
             opening: openAmtPre,
-            income: incomePreCur,
+            income: currentIncome.prePrimary,
             available: availAmtPre,
-            expenditure: expPre,
+            expenditure: currentExpenditure.prePrimary,
             closing: closeAmtPre,
           },
           primary: {
             opening: openAmtPri,
-            income: incomePriCur,
+            income: currentIncome.primary,
             available: availAmtPri,
-            expenditure: expPri,
+            expenditure: currentExpenditure.primary,
             closing: closeAmtPri,
           },
           middle: {
             opening: openAmtMid,
-            income: incomeMidCur,
+            income: currentIncome.middle,
             available: availAmtMid,
-            expenditure: expMid,
+            expenditure: currentExpenditure.middle,
             closing: closeAmtMid,
           },
         },
         sectionRice: {
           prePrimary: {
             opening: openRicePre,
-            lifted: ricePreCur,
+            lifted: currentRiceLifted.prePrimary,
             available: availRicePre,
-            consumed: riceConsumedPre,
+            consumed: currentRiceConsumed.prePrimary,
             closing: closeRicePre,
           },
           primary: {
             opening: openRicePri,
-            lifted: ricePriCur,
+            lifted: currentRiceLifted.primary,
             available: availRicePri,
-            consumed: riceConsumedPri,
+            consumed: currentRiceConsumed.primary,
             closing: closeRicePri,
           },
           middle: {
             opening: openRiceMid,
-            lifted: riceMidCur,
+            lifted: currentRiceLifted.middle,
             available: availRiceMid,
-            consumed: riceConsumedMid,
+            consumed: currentRiceConsumed.middle,
             closing: closeRiceMid,
           },
         },
         rates: {
-          prePrimaryRate: preRate,
-          primaryRate: priRate,
-          middleRate: midRate,
+          prePrimaryRate: rates.prePrimary,
+          primaryRate: rates.primary,
+          middleRate: rates.middle,
         },
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('Monthly report generation failed:', error);
+
     return NextResponse.json(
       { success: false, error: 'Failed to generate report' },
       { status: 500 }
