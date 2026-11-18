@@ -24,5 +24,23 @@ export const inputRates = defineType({
       type: 'number',
       validation: (Rule) => Rule.min(0),
     }),
+    defineField({
+      name: 'prePrimaryRice',
+      title: 'Pre-primary rice rate',
+      type: 'number',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'primaryRice',
+      title: 'Primary rice rate',
+      type: 'number',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'middleRice',
+      title: 'Middle rice rate',
+      type: 'number',
+      validation: (Rule) => Rule.min(0),
+    }),
   ],
 });
