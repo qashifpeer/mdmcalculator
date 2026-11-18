@@ -14,6 +14,12 @@ type MealsEntry = {
   prePrimary?: number;
   primary?: number;
   middle?: number;
+  prePrimaryRate?: number;
+  primaryRate?: number;
+  middleRate?: number;
+  prePrimaryRice?: number; // stored in grams (e.g., 100)
+  primaryRice?: number;    // stored in grams (e.g., 100)
+  middleRice?: number;     // stored in grams (e.g., 150)
 };
 
 type IncomeRow = {
@@ -25,9 +31,9 @@ type IncomeRow = {
 
 type RiceRow = {
   date?: string;
-  prePrimaryQty?: number;
-  primaryQty?: number;
-  middleQty?: number;
+  prePrimaryQty?: number; // stored in kg
+  primaryQty?: number;    // stored in kg
+  middleQty?: number;     // stored in kg
 };
 
 type SectionTriplet = {
@@ -64,7 +70,11 @@ function getFinancialYearStart(year: number, month: number) {
   return formatLocalDate(new Date(fyStartYear, 3, 1)); // 1 April
 }
 
-// ---------- Sum helpers ----------
+function roundKg(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+// ---------- Sum & Row-wise Calculation Helpers ----------
 
 function sumMeals(rows: MealsEntry[]): SectionTriplet {
   return rows.reduce<SectionTriplet>(
@@ -75,6 +85,59 @@ function sumMeals(rows: MealsEntry[]): SectionTriplet {
     }),
     { prePrimary: 0, primary: 0, middle: 0 }
   );
+}
+
+function sumExpenditureFromRows(
+  rows: MealsEntry[],
+  fallbackRates: SectionTriplet
+): SectionTriplet {
+  return rows.reduce<SectionTriplet>(
+    (acc, row) => ({
+      prePrimary:
+        acc.prePrimary +
+        (row.prePrimary || 0) * (row.prePrimaryRate ?? fallbackRates.prePrimary),
+      primary:
+        acc.primary +
+        (row.primary || 0) * (row.primaryRate ?? fallbackRates.primary),
+      middle:
+        acc.middle +
+        (row.middle || 0) * (row.middleRate ?? fallbackRates.middle),
+    }),
+    { prePrimary: 0, primary: 0, middle: 0 }
+  );
+}
+
+// Converts gram rates (e.g. 100g, 150g) to kg by dividing by 1000
+function sumRiceConsumedFromRows(
+  rows: MealsEntry[],
+  fallbackRiceRatesGrams: SectionTriplet
+): SectionTriplet {
+  const totals = rows.reduce<SectionTriplet>(
+    (acc, row) => ({
+      prePrimary:
+        acc.prePrimary +
+        ((row.prePrimary || 0) *
+          (row.prePrimaryRice ?? fallbackRiceRatesGrams.prePrimary)) /
+          1000,
+      primary:
+        acc.primary +
+        ((row.primary || 0) *
+          (row.primaryRice ?? fallbackRiceRatesGrams.primary)) /
+          1000,
+      middle:
+        acc.middle +
+        ((row.middle || 0) *
+          (row.middleRice ?? fallbackRiceRatesGrams.middle)) /
+          1000,
+    }),
+    { prePrimary: 0, primary: 0, middle: 0 }
+  );
+
+  return {
+    prePrimary: roundKg(totals.prePrimary),
+    primary: roundKg(totals.primary),
+    middle: roundKg(totals.middle),
+  };
 }
 
 function sumIncome(rows: IncomeRow[]): SectionTriplet {
@@ -99,46 +162,53 @@ function sumRice(rows: RiceRow[]): SectionTriplet {
   );
 }
 
-function getRiceConsumedFromMeals(meals: SectionTriplet): SectionTriplet {
-  return {
-    prePrimary: meals.prePrimary * 0.1,
-    primary: meals.primary * 0.1,
-    middle: meals.middle * 0.15,
-  };
-}
-
-function getExpenditureFromMeals(
-  meals: SectionTriplet,
-  rates: SectionTriplet
-): SectionTriplet {
-  return {
-    prePrimary: meals.prePrimary * rates.prePrimary,
-    primary: meals.primary * rates.primary,
-    middle: meals.middle * rates.middle,
-  };
-}
-
 function getSectionTotal(values: SectionTriplet) {
   return values.prePrimary + values.primary + values.middle;
 }
 
 // ---------- Sanity fetch helpers ----------
 
-async function fetchRates(): Promise<SectionTriplet> {
+async function fetchFallbackRates(): Promise<{
+  moneyRates: SectionTriplet;
+  riceRatesGrams: SectionTriplet;
+}> {
   const rates = await sanityClient.fetch(
-    `*[_type == "inputRates"] | order(_createdAt desc)[0]{
+    `*[_type == "inputRates"] | order(_updatedAt desc)[0]{
       prePrimaryRate,
       primaryRate,
-      middleRate
+      middleRate,
+      prePrimaryRice,
+      primaryRice,
+      middleRice
     }`
   );
 
   return {
-    prePrimary: rates?.prePrimaryRate ?? 0,
-    primary: rates?.primaryRate ?? 0,
-    middle: rates?.middleRate ?? 0,
+    moneyRates: {
+      prePrimary: rates?.prePrimaryRate ?? 0,
+      primary: rates?.primaryRate ?? 0,
+      middle: rates?.middleRate ?? 0,
+    },
+    riceRatesGrams: {
+      prePrimary: rates?.prePrimaryRice ?? 100,
+      primary: rates?.primaryRice ?? 100,
+      middle: rates?.middleRice ?? 150,
+    },
   };
 }
+
+const MEALS_FIELDS = `{
+  date,
+  prePrimary,
+  primary,
+  middle,
+  prePrimaryRate,
+  primaryRate,
+  middleRate,
+  prePrimaryRice,
+  primaryRice,
+  middleRice
+}`;
 
 async function fetchMeals(from: string, to: string): Promise<MealsEntry[]> {
   return sanityClient.fetch(
@@ -146,12 +216,7 @@ async function fetchMeals(from: string, to: string): Promise<MealsEntry[]> {
       _type == "mealsEntry" &&
       date >= $from &&
       date <= $to
-    ] | order(date asc){
-      date,
-      prePrimary,
-      primary,
-      middle
-    }`,
+    ] | order(date asc) ${MEALS_FIELDS}`,
     { from, to }
   );
 }
@@ -161,12 +226,7 @@ async function fetchMealsUpto(to: string): Promise<MealsEntry[]> {
     `*[
       _type == "mealsEntry" &&
       date <= $to
-    ] | order(date asc){
-      date,
-      prePrimary,
-      primary,
-      middle
-    }`,
+    ] | order(date asc) ${MEALS_FIELDS}`,
     { to }
   );
 }
@@ -186,7 +246,6 @@ async function fetchIncome(from: string, to: string): Promise<IncomeRow[]> {
     { from, to }
   );
 }
-
 
 async function fetchRice(from: string, to: string): Promise<RiceRow[]> {
   return sanityClient.fetch(
@@ -239,7 +298,7 @@ export async function POST(request: Request) {
     const fyStart = getFinancialYearStart(year, month);
     const isApril = month === 4;
 
-    const rates = await fetchRates();
+    const { moneyRates, riceRatesGrams } = await fetchFallbackRates();
 
     // ---------- Current month data ----------
     const [meals, incomesCurrentRows, riceCurrentRows] = await Promise.all([
@@ -252,13 +311,15 @@ export async function POST(request: Request) {
     const currentIncome = sumIncome(incomesCurrentRows);
     const currentRiceLifted = sumRice(riceCurrentRows);
 
-    const currentRiceConsumed = getRiceConsumedFromMeals(currentMeals);
-    const currentExpenditure = getExpenditureFromMeals(currentMeals, rates);
+    const currentRiceConsumed = sumRiceConsumedFromRows(meals, riceRatesGrams);
+    const currentExpenditure = sumExpenditureFromRows(meals, moneyRates);
 
     const totalMealsAll = getSectionTotal(currentMeals);
     const totalIncomeCurrent = getSectionTotal(currentIncome);
-    const totalRiceLiftedCurrent = getSectionTotal(currentRiceLifted);
-    const totalRiceConsumedCurrent = getSectionTotal(currentRiceConsumed);
+    const totalRiceLiftedCurrent = roundKg(getSectionTotal(currentRiceLifted));
+    const totalRiceConsumedCurrent = roundKg(
+      getSectionTotal(currentRiceConsumed)
+    );
     const totalExpenditureCurrent = getSectionTotal(currentExpenditure);
 
     // ---------- Previous period MONEY (reset each FY) ----------
@@ -268,7 +329,7 @@ export async function POST(request: Request) {
       middle: 0,
     };
 
-    let previousMealsForMoney: SectionTriplet = {
+    let previousExpenditure: SectionTriplet = {
       prePrimary: 0,
       primary: 0,
       middle: 0,
@@ -281,41 +342,44 @@ export async function POST(request: Request) {
       ]);
 
       previousIncome = sumIncome(incomesPrevRows);
-      previousMealsForMoney = sumMeals(mealsPrevRowsForMoney);
+      previousExpenditure = sumExpenditureFromRows(
+        mealsPrevRowsForMoney,
+        moneyRates
+      );
     }
-
-    const previousExpenditure = getExpenditureFromMeals(
-      previousMealsForMoney,
-      rates
-    );
 
     const totalIncomePrev = getSectionTotal(previousIncome);
     const totalExpenditurePrev = getSectionTotal(previousExpenditure);
 
-    // ---------- Previous period RICE (carry from all past years) ----------
+    // ---------- Previous period RICE (carry from all past years, in kg) ----------
     const [mealsPrevRowsForRice, ricePrevRows] = await Promise.all([
       fetchMealsUpto(prevTo),
       fetchRiceUpto(prevTo),
     ]);
 
-    const previousMealsForRice = sumMeals(mealsPrevRowsForRice);
     const previousRiceReceived = sumRice(ricePrevRows);
-    const previousRiceConsumed =
-      getRiceConsumedFromMeals(previousMealsForRice);
+    const previousRiceConsumed = sumRiceConsumedFromRows(
+      mealsPrevRowsForRice,
+      riceRatesGrams
+    );
 
-    const totalRiceReceivedPrev = getSectionTotal(previousRiceReceived);
-    const totalRiceConsumedPrev = getSectionTotal(previousRiceConsumed);
+    const totalRiceReceivedPrev = roundKg(getSectionTotal(previousRiceReceived));
+    const totalRiceConsumedPrev = roundKg(getSectionTotal(previousRiceConsumed));
 
     // ---------- Opening and closing balances (totals) ----------
     const openingAmountBalance = totalIncomePrev - totalExpenditurePrev;
     const closingAmountBalance =
       openingAmountBalance + totalIncomeCurrent - totalExpenditureCurrent;
 
-    const openingRiceBalance = totalRiceReceivedPrev - totalRiceConsumedPrev;
-    const totalRiceAvailableCurrent =
-      openingRiceBalance + totalRiceLiftedCurrent;
-    const closingRiceBalance =
-      totalRiceAvailableCurrent - totalRiceConsumedCurrent;
+    const openingRiceBalance = roundKg(
+      totalRiceReceivedPrev - totalRiceConsumedPrev
+    );
+    const totalRiceAvailableCurrent = roundKg(
+      openingRiceBalance + totalRiceLiftedCurrent
+    );
+    const closingRiceBalance = roundKg(
+      totalRiceAvailableCurrent - totalRiceConsumedCurrent
+    );
 
     // ---------- Section-wise money ----------
     const openAmtPre =
@@ -333,21 +397,26 @@ export async function POST(request: Request) {
     const closeAmtPri = availAmtPri - currentExpenditure.primary;
     const closeAmtMid = availAmtMid - currentExpenditure.middle;
 
-    // ---------- Section-wise rice ----------
-    const openRicePre =
-      previousRiceReceived.prePrimary - previousRiceConsumed.prePrimary;
-    const openRicePri =
-      previousRiceReceived.primary - previousRiceConsumed.primary;
-    const openRiceMid =
-      previousRiceReceived.middle - previousRiceConsumed.middle;
+    // ---------- Section-wise rice (all in kg) ----------
+    const openRicePre = roundKg(
+      previousRiceReceived.prePrimary - previousRiceConsumed.prePrimary
+    );
+    const openRicePri = roundKg(
+      previousRiceReceived.primary - previousRiceConsumed.primary
+    );
+    const openRiceMid = roundKg(
+      previousRiceReceived.middle - previousRiceConsumed.middle
+    );
 
-    const availRicePre = openRicePre + currentRiceLifted.prePrimary;
-    const availRicePri = openRicePri + currentRiceLifted.primary;
-    const availRiceMid = openRiceMid + currentRiceLifted.middle;
+    const availRicePre = roundKg(openRicePre + currentRiceLifted.prePrimary);
+    const availRicePri = roundKg(openRicePri + currentRiceLifted.primary);
+    const availRiceMid = roundKg(openRiceMid + currentRiceLifted.middle);
 
-    const closeRicePre = availRicePre - currentRiceConsumed.prePrimary;
-    const closeRicePri = availRicePri - currentRiceConsumed.primary;
-    const closeRiceMid = availRiceMid - currentRiceConsumed.middle;
+    const closeRicePre = roundKg(availRicePre - currentRiceConsumed.prePrimary);
+    const closeRicePri = roundKg(availRicePri - currentRiceConsumed.primary);
+    const closeRiceMid = roundKg(availRiceMid - currentRiceConsumed.middle);
+
+    const latestEntry = meals[meals.length - 1];
 
     return NextResponse.json({
       success: true,
@@ -430,9 +499,19 @@ export async function POST(request: Request) {
           },
         },
         rates: {
-          prePrimaryRate: rates.prePrimary,
-          primaryRate: rates.primary,
-          middleRate: rates.middle,
+          prePrimaryRate: latestEntry?.prePrimaryRate ?? moneyRates.prePrimary,
+          primaryRate: latestEntry?.primaryRate ?? moneyRates.primary,
+          middleRate: latestEntry?.middleRate ?? moneyRates.middle,
+          // Exposed in kg (e.g., 0.1 kg, 0.15 kg)
+          prePrimaryRice: roundKg(
+            (latestEntry?.prePrimaryRice ?? riceRatesGrams.prePrimary) / 1000
+          ),
+          primaryRice: roundKg(
+            (latestEntry?.primaryRice ?? riceRatesGrams.primary) / 1000
+          ),
+          middleRice: roundKg(
+            (latestEntry?.middleRice ?? riceRatesGrams.middle) / 1000
+          ),
         },
       },
     });
